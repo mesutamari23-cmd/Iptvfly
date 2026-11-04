@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Xtream Player</string>
+    <string name="tagline">Your IPTV, beautifully organized</string>
+    <string name="account_name">Account name (optional)</string>
+    <string name="server_url">Server URL (http://host:port)</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="connect">Connect</string>
+    <string name="live">Live</string>
+    <string name="movies">Movies</string>
+    <string name="series">Series</string>
+    <string name="favorites">Favorites</string>
+    <string name="search">Search</string>
+    <string name="all">All</string>
+    <string name="play">Play</string>
+    <string name="no_results">Nothing here yet</string>
+    <string name="add_account">Add account</string>
+    <string name="remove_account">Remove this account</string>
+    <string name="error_auth">Wrong username or password, or subscription inactive</string>
+    <string name="error_network">Could not reach the server. Check the URL and your connection</string>
+    <string name="error_fields">Please fill in server, username and password</string>
+    <string name="error_load">Loading failed</string>
+    <string name="retry">Retry</string>
+    <string name="season_n">Season %1$d</string>
+    <string name="episode_n">Episode %1$d</string>
+    <string name="playback_error">Playback error</string>
+    <string name="back">Back</string>
+</resources>
