@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Xtream Player</string>
+    <string name="tagline">بثّك المفضل بتنظيم احترافي</string>
+    <string name="account_name">اسم الحساب (اختياري)</string>
+    <string name="server_url">رابط السيرفر (http://host:port)</string>
+    <string name="username">اسم المستخدم</string>
+    <string name="password">كلمة المرور</string>
+    <string name="connect">اتصال</string>
+    <string name="live">مباشر</string>
+    <string name="movies">أفلام</string>
+    <string name="series">مسلسلات</string>
+    <string name="favorites">المفضلة</string>
+    <string name="search">بحث</string>
+    <string name="all">الكل</string>
+    <string name="play">تشغيل</string>
+    <string name="no_results">لا يوجد محتوى</string>
+    <string name="add_account">إضافة حساب</string>
+    <string name="remove_account">حذف هذا الحساب</string>
+    <string name="error_auth">اسم المستخدم أو كلمة المرور خاطئة، أو الاشتراك غير فعّال</string>
+    <string name="error_network">تعذّر الوصول إلى السيرفر. تحقق من الرابط والإنترنت</string>
+    <string name="error_fields">أدخل السيرفر واسم المستخدم وكلمة المرور</string>
+    <string name="error_load">فشل التحميل</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="season_n">الموسم %1$d</string>
+    <string name="episode_n">الحلقة %1$d</string>
+    <string name="playback_error">خطأ في التشغيل</string>
+    <string name="back">رجوع</string>
+</resources>
