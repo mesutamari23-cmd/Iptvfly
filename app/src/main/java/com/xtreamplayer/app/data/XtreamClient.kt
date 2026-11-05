@@ -110,15 +110,49 @@ class XtreamClient {
         return SeriesDetail(info.str("plot"), info.str("cover"), result)
     }
 
-    /** Returns the title of the programme currently airing, if the server provides EPG data. */
-    suspend fun nowPlaying(a: Account, streamId: String): String? {
-        val body = fetch(api(a, "get_short_epg", "&stream_id=${enc(streamId)}&limit=1"))
-        val listings = json.parseToJsonElement(body).jsonObject["epg_listings"] as? JsonArray ?: return null
-        val title = (listings.firstOrNull() as? JsonObject)?.str("title") ?: return null
-        return runCatching { String(Base64.decode(title, Base64.DEFAULT), Charsets.UTF_8) }.getOrDefault(title)
+    /** Programme guide of one channel (full day when the server supports it, short EPG otherwise). */
+    suspend fun schedule(a: Account, streamId: String): List<Program> {
+        val full = listings(fetch(api(a, "get_simple_data_table", "&stream_id=${enc(streamId)}")))
+        if (full.isNotEmpty()) return full
+        return listings(fetch(api(a, "get_short_epg", "&stream_id=${enc(streamId)}&limit=20")))
     }
 
+    private fun listings(body: String): List<Program> {
+        val arr = runCatching { json.parseToJsonElement(body).jsonObject["epg_listings"] as? JsonArray }
+            .getOrNull() ?: return emptyList()
+        return arr.mapNotNull { el ->
+            val o = el as? JsonObject ?: return@mapNotNull null
+            val start = o.str("start_timestamp")?.toLongOrNull() ?: return@mapNotNull null
+            val end = o.str("stop_timestamp")?.toLongOrNull() ?: return@mapNotNull null
+            val rawTitle = o.str("title") ?: return@mapNotNull null
+            Program(
+                title = decode(rawTitle),
+                start = start * 1000,
+                end = end * 1000,
+                description = o.str("description")?.let { decode(it) },
+            )
+        }.sortedBy { it.start }
+    }
+
+    private fun decode(s: String): String =
+        runCatching { String(Base64.decode(s, Base64.DEFAULT), Charsets.UTF_8) }.getOrDefault(s)
+
+    /** Downloads an M3U playlist as text. */
+    suspend fun playlist(url: String): String = fetch(url)
+
+    /** Downloads an XMLTV guide (plain or gzip) and keeps only the wanted channels in the window. */
+    suspend fun xmltv(url: String, wanted: Set<String>, from: Long, to: Long): Map<String, List<Program>> =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+            http.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) throw IOException("HTTP ${r.code}")
+                val body = r.body ?: throw IOException("Empty response")
+                XmltvParser.parse(body.byteStream(), wanted, from, to)
+            }
+        }
+
     fun liveUrl(a: Account, id: String) = "${a.baseUrl}/live/${a.username}/${a.password}/$id.m3u8"
+    fun liveTsUrl(a: Account, id: String) = "${a.baseUrl}/live/${a.username}/${a.password}/$id.ts"
     fun movieUrl(a: Account, id: String, ext: String?) =
         "${a.baseUrl}/movie/${a.username}/${a.password}/$id.${ext ?: "mp4"}"
     fun episodeUrl(a: Account, id: String, ext: String) =

@@ -40,6 +40,8 @@ fun LoginScreen(vm: AppViewModel, onBack: (() -> Unit)?, onDone: () -> Unit) {
     var url by rememberSaveable { mutableStateOf("") }
     var user by rememberSaveable { mutableStateOf("") }
     var pass by rememberSaveable { mutableStateOf("") }
+    var epg by rememberSaveable { mutableStateOf("") }
+    var m3u by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var errorRes by remember { mutableStateOf<Int?>(null) }
     val scope = rememberCoroutineScope()
@@ -47,17 +49,19 @@ fun LoginScreen(vm: AppViewModel, onBack: (() -> Unit)?, onDone: () -> Unit) {
 
     fun submit() {
         if (busy) return
-        if (url.isBlank() || user.isBlank() || pass.isBlank()) {
+        if (url.isBlank() || (!m3u && (user.isBlank() || pass.isBlank()))) {
             errorRes = R.string.error_fields
             return
         }
         busy = true
         errorRes = null
         scope.launch {
-            when (vm.addAccount(name, url, user, pass)) {
+            val result = if (m3u) vm.addPlaylist(name, url, epg) else vm.addAccount(name, url, user, pass)
+            when (result) {
                 LoginResult.OK -> onDone()
                 LoginResult.AUTH -> errorRes = R.string.error_auth
                 LoginResult.NETWORK -> errorRes = R.string.error_network
+                LoginResult.INVALID -> errorRes = R.string.error_playlist
             }
             busy = false
         }
@@ -102,6 +106,18 @@ fun LoginScreen(vm: AppViewModel, onBack: (() -> Unit)?, onDone: () -> Unit) {
             )
             Spacer(Modifier.height(28.dp))
 
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !m3u, onClick = { m3u = false; errorRes = null },
+                    label = { Text(stringResource(R.string.type_xtream)) },
+                )
+                FilterChip(
+                    selected = m3u, onClick = { m3u = true; errorRes = null },
+                    label = { Text(stringResource(R.string.type_m3u)) },
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+
             val next = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) })
             OutlinedTextField(
                 value = name, onValueChange = { name = it }, singleLine = true,
@@ -112,27 +128,39 @@ fun LoginScreen(vm: AppViewModel, onBack: (() -> Unit)?, onDone: () -> Unit) {
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(
                 value = url, onValueChange = { url = it }, singleLine = true,
-                label = { Text(stringResource(R.string.server_url)) },
+                label = { Text(stringResource(if (m3u) R.string.playlist_url else R.string.server_url)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 keyboardActions = next,
             )
+            if (m3u) {
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = epg, onValueChange = { epg = it }, singleLine = true,
+                    label = { Text(stringResource(R.string.epg_url)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); submit() }),
+                )
+            } else {
             Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = user, onValueChange = { user = it }, singleLine = true,
-                label = { Text(stringResource(R.string.username)) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = next,
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = pass, onValueChange = { pass = it }, singleLine = true,
-                label = { Text(stringResource(R.string.password)) },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); submit() }),
-            )
+                OutlinedTextField(
+                    value = user, onValueChange = { user = it }, singleLine = true,
+                    label = { Text(stringResource(R.string.username)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = next,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = pass, onValueChange = { pass = it }, singleLine = true,
+                    label = { Text(stringResource(R.string.password)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); submit() }),
+                )
+    
+            }
 
             errorRes?.let {
                 Spacer(Modifier.height(12.dp))

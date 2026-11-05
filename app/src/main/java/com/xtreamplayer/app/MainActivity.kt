@@ -1,7 +1,10 @@
 package com.xtreamplayer.app
 
+import android.app.PictureInPictureParams
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,9 +30,22 @@ import com.xtreamplayer.app.ui.screens.DetailScreen
 import com.xtreamplayer.app.ui.screens.HomeScreen
 import com.xtreamplayer.app.ui.screens.LoginScreen
 import com.xtreamplayer.app.ui.screens.PlayerScreen
+import com.xtreamplayer.app.ui.screens.SettingsScreen
 import com.xtreamplayer.app.ui.theme.XtreamTheme
 
 class MainActivity : ComponentActivity() {
+
+    /** Set by the player while a video is playing so Home press can switch to picture-in-picture. */
+    @Volatile
+    var canEnterPip: Boolean = false
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (canEnterPip && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !isInPictureInPictureMode) {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build())
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -77,14 +93,20 @@ fun AppNav(vm: AppViewModel = viewModel()) {
             HomeScreen(
                 vm = vm,
                 onOpen = { e ->
-                    if (e.type == ContentType.LIVE) {
-                        vm.prepareLive(e)
-                        nav.navigate("player")
-                    } else {
-                        nav.navigate("detail/${e.type.name}/${Uri.encode(e.id)}")
+                    when {
+                        e.url != null -> {
+                            vm.prepareDirect(e)
+                            nav.navigate("player")
+                        }
+                        e.type == ContentType.LIVE -> {
+                            vm.prepareLive(e)
+                            nav.navigate("player")
+                        }
+                        else -> nav.navigate("detail/${e.type.name}/${Uri.encode(e.id)}")
                     }
                 },
                 onAddAccount = { nav.navigate("login") },
+                onOpenSettings = { nav.navigate("settings") },
             )
         }
         composable(
@@ -110,10 +132,15 @@ fun AppNav(vm: AppViewModel = viewModel()) {
                 PlayerScreen(
                     playback = pb,
                     client = vm.playerHttpClient(),
-                    loadNowPlaying = { vm.nowPlaying(it) },
+                    loadStart = { vm.startPosition(pb.resumeKey) },
+                    loadGuide = { vm.guide(pb) },
+                    onSavePosition = { key, pos -> vm.savePosition(key, pos) },
                     onBack = { nav.popBackStack() },
                 )
             }
+        }
+        composable("settings") {
+            SettingsScreen(vm = vm, onBack = { nav.popBackStack() })
         }
     }
 }

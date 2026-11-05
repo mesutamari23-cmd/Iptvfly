@@ -24,14 +24,16 @@ import com.xtreamplayer.app.R
 import com.xtreamplayer.app.data.Catalog
 import com.xtreamplayer.app.data.ContentType
 import com.xtreamplayer.app.data.Entry
+import com.xtreamplayer.app.data.isAdultName
 
 private data class HomeTab(val labelRes: Int, val icon: ImageVector)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Unit) {
+fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Unit, onOpenSettings: () -> Unit) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val favs by vm.favorites.collectAsStateWithLifecycle()
+    val lock by vm.adultLock.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -58,10 +60,25 @@ fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Un
         remember(ui.live, ui.movies, ui.series, favs, ui.active) { vm.favoriteEntries(ui, favs) }
     } else catalog?.items.orEmpty()
 
-    val filtered = remember(base, category, query) {
+    val hiddenCats: Set<String> = remember(lock, ui.live, ui.movies, ui.series) {
+        val hidden = HashSet<String>()
+        if (lock) {
+            ui.live.categories.filter { isAdultName(it.name) }.forEach { hidden.add("LIVE|" + it.id) }
+            ui.movies.categories.filter { isAdultName(it.name) }.forEach { hidden.add("MOVIE|" + it.id) }
+            ui.series.categories.filter { isAdultName(it.name) }.forEach { hidden.add("SERIES|" + it.id) }
+        }
+        hidden
+    }
+
+    val visibleCategories = remember(catalog, lock) {
+        catalog?.categories.orEmpty().filterNot { lock && isAdultName(it.name) }
+    }
+
+    val filtered = remember(base, category, query, hiddenCats) {
         base.filter { e ->
             (category == null || e.categoryId == category) &&
-                (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true))
+                (query.isBlank() || e.name.contains(query.trim(), ignoreCase = true)) &&
+                (hiddenCats.isEmpty() || e.categoryId == null || (e.type.name + "|" + e.categoryId) !in hiddenCats)
         }
     }
 
@@ -119,6 +136,11 @@ fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Un
                                     onClick = { menu = false; onAddAccount() },
                                 )
                                 DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.settings)) },
+                                    leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                    onClick = { menu = false; onOpenSettings() },
+                                )
+                                DropdownMenuItem(
                                     text = { Text(stringResource(R.string.retry)) },
                                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
                                     onClick = { menu = false; vm.reload() },
@@ -150,8 +172,8 @@ fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Un
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            if (catalog != null && catalog.categories.isNotEmpty()) {
-                CategoryRow(catalog.categories, category) { category = it }
+            if (catalog != null && visibleCategories.isNotEmpty()) {
+                CategoryRow(visibleCategories, category) { category = it }
             }
             when {
                 base.isEmpty() && ui.loading -> Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
@@ -159,10 +181,11 @@ fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Un
                 }
                 base.isEmpty() && ui.error != null && tab != 3 ->
                     CenterMessage(stringResource(R.string.error_load), stringResource(R.string.retry)) { vm.reload() }
-                filtered.isEmpty() -> CenterMessage(stringResource(R.string.no_results))
+                filtered.isEmpty() ->
+                    CenterMessage(stringResource(if (tab == 3) R.string.no_favorites else R.string.no_results))
                 tab == 0 -> LazyColumn(Modifier.fillMaxSize()) {
                     items(filtered, key = { it.id }) { e ->
-                        LiveRow(e, vm.isFavorite(favs, e)) { onOpen(e) }
+                        LiveRow(e, vm.isFavorite(favs, e), onLongClick = { vm.toggleFavorite(e) }) { onOpen(e) }
                     }
                 }
                 else -> LazyVerticalGrid(
@@ -173,7 +196,7 @@ fun HomeScreen(vm: AppViewModel, onOpen: (Entry) -> Unit, onAddAccount: () -> Un
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(filtered, key = { "${it.type}-${it.id}" }) { e ->
-                        PosterCard(e, vm.isFavorite(favs, e)) { onOpen(e) }
+                        PosterCard(e, vm.isFavorite(favs, e), onLongClick = { vm.toggleFavorite(e) }) { onOpen(e) }
                     }
                 }
             }

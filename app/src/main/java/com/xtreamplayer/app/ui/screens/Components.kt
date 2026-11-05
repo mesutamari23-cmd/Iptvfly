@@ -1,7 +1,8 @@
 package com.xtreamplayer.app.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -25,12 +26,13 @@ import com.xtreamplayer.app.data.ContentType
 import com.xtreamplayer.app.data.Entry
 import com.xtreamplayer.app.ui.theme.Accent
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PosterCard(e: Entry, favorite: Boolean, onClick: () -> Unit) {
+fun PosterCard(e: Entry, favorite: Boolean, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     Column(
         Modifier
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
+            .combinedClickable(onLongClick = onLongClick, onClick = onClick)
     ) {
         Box(
             Modifier
@@ -77,12 +79,13 @@ fun PosterCard(e: Entry, favorite: Boolean, onClick: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LiveRow(e: Entry, favorite: Boolean, onClick: () -> Unit) {
+fun LiveRow(e: Entry, favorite: Boolean, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onLongClick = onLongClick, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -8,9 +8,13 @@ data class Account(
     val id: String,
     val name: String,
     val baseUrl: String,
-    val username: String,
-    val password: String,
-)
+    val username: String = "",
+    val password: String = "",
+    val type: String = "XTREAM",
+    val epgUrl: String = "",
+) {
+    val isM3u: Boolean get() = type == "M3U"
+}
 
 @Serializable
 data class AuthResponse(
@@ -68,6 +72,8 @@ data class Entry(
     val categoryId: String?,
     val rating: String? = null,
     val ext: String? = null,
+    val url: String? = null,
+    val epgId: String? = null,
 )
 
 data class Catalog(
@@ -103,6 +109,22 @@ data class Playback(
     val url: String,
     val title: String,
     val liveId: String? = null,
+    val epgId: String? = null,
+    val resumeKey: String? = null,
+    val fallbackUrl: String? = null,
 )
+
+/** One programme of the electronic programme guide. Times are epoch milliseconds. */
+data class Program(
+    val title: String,
+    val start: Long,
+    val end: Long,
+    val description: String?,
+)
+
+private val ADULT_REGEX = Regex("(?i)(\\bxxx\\b|adult|porn|\\b18\\s*\\+|\\+\\s*18|erotic|\\bsex\\b|nsfw)")
+
+/** Used by the parental control to detect adult categories by name. */
+fun isAdultName(name: String): Boolean = ADULT_REGEX.containsMatchIn(name)
 
 class AuthFailed : Exception()
