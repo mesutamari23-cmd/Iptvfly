@@ -1,45 +1,86 @@
-name: Build APK
+name: Mesut IPTV Android Build
+
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Apply update.zip if present
-        run: |
-          if [ -f update.zip ]; then
-            unzip -o update.zip -d .
-            rm update.zip
-            git config user.name "github-actions"
-            git config user.email "actions@github.com"
-            git add -A
-            git commit -m "Apply update.zip" || true
-            git push || true
-          fi
-      - uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          gradle-version: 8.11.1
-      - name: Decode keystore
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform files
+        run: flutter create --platforms=android --org com.mesut --project-name mesut_iptv .
+
+      - name: Configure Android manifest
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-      - name: Build signed release
-        env:
-          KEYSTORE_FILE: ${{ runner.temp }}/release.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: gradle assembleRelease --stacktrace
-      - uses: actions/upload-artifact@v4
+          ADMOB_APP_ID: ca-app-pub-8292052707705243~8609546278
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          s = s.replace('<manifest ', '<manifest ', 1)
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace('<application', '    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>\n    <uses-feature android:name="android.software.leanback" android:required="false"/>\n    <application', 1)
+          if 'LEANBACK_LAUNCHER' not in s:
+              s = s.replace('<category android:name="android.intent.category.LAUNCHER"/>', '<category android:name="android.intent.category.LAUNCHER"/>\n                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>')
+          s = s.replace('android:label="${applicationName}"', 'android:label="Mesut IPTV"')
+          if 'android:usesCleartextTraffic' not in s:
+              s = s.replace('<application', '<application android:usesCleartextTraffic="true"', 1)
+          app_id = os.environ['ADMOB_APP_ID']
+          if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
+              s = s.replace('</application>', f'        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="{app_id}"/>\n    </application>')
+          p.write_text(s)
+          PY
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/; s/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle*
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Run tests when present
+        shell: bash
+        run: |
+          if [ -d test ] && find test -type f -name '*_test.dart' | grep -q .; then
+            flutter test
+          else
+            echo 'No automated test files are present yet; device QA is still required.'
+          fi
+
+      - name: Build release APK
+        run: flutter build apk --release --no-shrink --target-platform android-arm,android-arm64
+
+      - name: Build release Android App Bundle
+        run: flutter build appbundle --release --no-shrink
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: app/build/outputs/apk/release/*.apk
+          name: mesut-iptv-android-release-candidate
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
