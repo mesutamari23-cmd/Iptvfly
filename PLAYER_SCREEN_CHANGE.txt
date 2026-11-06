@@ -1,0 +1,15 @@
+في ملف lib/player_screen.dart:
+
+1) احتفظ بالاستيراد الموجود:
+import 'package:media_kit/media_kit.dart';
+
+2) داخل الدالة initState() أضف MediaKit.ensureInitialized() مباشرة بعد super.initState() وقبل أول استخدام لـ _p:
+
+@override
+void initState() {
+  super.initState();
+  MediaKit.ensureInitialized();
+  // بقية الكود الحالي كما هو...
+}
+
+السبب: لم نعد نهيئ MediaKit عند تشغيل التطبيق؛ تتم تهيئته فقط عند فتح مشغل الفيديو وقبل إنشاء Player.
