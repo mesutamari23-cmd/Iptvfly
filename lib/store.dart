@@ -8,62 +8,115 @@ class Store {
   static const FlutterSecureStorage _vault = FlutterSecureStorage();
   static const String _accountsKey = 'secure_accounts_v1';
   static const String _pinKey = 'secure_parental_pin_v1';
+  static const String _fallbackAccountsKey = '_fallback_secure_accounts_v1';
+  static const String _fallbackPinKey = '_fallback_parental_pin_v1';
+
   static List<Account> _accountsCache = [];
   static String? _pinCache;
+  static bool _vaultAvailable = true;
 
   static Future<void> init() async {
     _p = await SharedPreferences.getInstance();
+    _accountsCache = [];
+    _pinCache = null;
+    _vaultAvailable = true;
 
-    // Load encrypted account data first. Migrate legacy SharedPreferences once.
-    final secureAccounts = await _vault.read(key: _accountsKey);
-    if (secureAccounts != null && secureAccounts.isNotEmpty) {
-      final decoded = jsonDecode(secureAccounts);
-      _accountsCache = decoded is List
-          ? decoded.map((e) => Account.fromJson(Map<String, dynamic>.from(e))).toList()
-          : <Account>[];
-    } else {
-      final legacy = (_p.getStringList('accounts') ?? [])
-          .map((s) => Account.fromJson(Map<String, dynamic>.from(jsonDecode(s))))
-          .toList();
+    String? storedAccounts;
+    try {
+      storedAccounts = await _vault.read(key: _accountsKey);
+    } catch (_) {
+      _vaultAvailable = false;
+    }
+    storedAccounts ??= _p.getString(_fallbackAccountsKey);
+
+    if (storedAccounts != null && storedAccounts.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(storedAccounts);
+        if (decoded is List) {
+          _accountsCache = decoded
+              .map((e) => Account.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+        }
+      } catch (_) {
+        // Ignore corrupt stored data and try the legacy migration below.
+        _accountsCache = [];
+      }
+    }
+
+    if (_accountsCache.isEmpty) {
+      final legacy = <Account>[];
+      for (final s in (_p.getStringList('accounts') ?? <String>[])) {
+        try {
+          legacy.add(Account.fromJson(
+              Map<String, dynamic>.from(jsonDecode(s) as Map)));
+        } catch (_) {
+          // Skip a damaged legacy account instead of crashing app startup.
+        }
+      }
       if (legacy.isNotEmpty) {
         _accountsCache = legacy;
       } else if (_p.getString('url') != null) {
         final u = _p.getString('user') ?? '';
-        _accountsCache = [Account(u.isEmpty ? 'حسابي' : u, _p.getString('url')!, u,
-            _p.getString('pass') ?? '')];
+        _accountsCache = [
+          Account(
+            u.isEmpty ? 'حسابي' : u,
+            _p.getString('url')!,
+            u,
+            _p.getString('pass') ?? '',
+          )
+        ];
       }
-      if (_accountsCache.isNotEmpty) await _writeSecureAccounts();
+
+      if (_accountsCache.isNotEmpty) {
+        await _writeSecureAccounts();
+      }
       await _p.remove('accounts');
       await _p.remove('url');
       await _p.remove('user');
       await _p.remove('pass');
     }
 
-    _pinCache = await _vault.read(key: _pinKey);
+    try {
+      _pinCache = await _vault.read(key: _pinKey);
+    } catch (_) {
+      _vaultAvailable = false;
+    }
+    _pinCache ??= _p.getString(_fallbackPinKey);
     if (_pinCache == null && _p.getString('pin') != null) {
       _pinCache = _p.getString('pin');
-      await _vault.write(key: _pinKey, value: _pinCache);
+      await setPin(_pinCache);
       await _p.remove('pin');
     }
   }
 
-  // ---------------- اللغة ----------------
   static String get lang => _p.getString('lang') ?? 'ar';
   static Future<void> setLang(String v) async {
     await _p.setString('lang', v);
   }
 
-  // ---------------- الحسابات ----------------
   static List<Account> accounts() => List.unmodifiable(_accountsCache);
 
   static Future<void> _writeSecureAccounts() async {
-    await _vault.write(key: _accountsKey, value: jsonEncode(_accountsCache.map((a) => a.toJson()).toList()));
+    final value =
+        jsonEncode(_accountsCache.map((a) => a.toJson()).toList());
+    if (_vaultAvailable) {
+      try {
+        await _vault.write(key: _accountsKey, value: value);
+        await _p.remove(_fallbackAccountsKey);
+        return;
+      } catch (_) {
+        _vaultAvailable = false;
+      }
+    }
+    // Compatibility fallback for devices where Android Keystore is unavailable.
+    // This fallback is not encrypted; secure storage remains the preferred path.
+    await _p.setString(_fallbackAccountsKey, value);
   }
 
   static Account? get active {
     final l = accounts();
     if (l.isEmpty) return null;
-    final i = (_p.getInt('active') ?? 0);
+    final i = _p.getInt('active') ?? 0;
     return l[i < 0 || i >= l.length ? 0 : i];
   }
 
@@ -97,7 +150,6 @@ class Store {
 
   static String get _pre => '${active?.id ?? 'x'}|';
 
-  // ---------------- الإعدادات ----------------
   static String get liveFormat => _p.getString('fmt') ?? 'ts';
   static Future<void> setLiveFormat(String v) async {
     await _p.setString('fmt', v);
@@ -107,13 +159,26 @@ class Store {
   static Future<void> setPin(String? v) async {
     _pinCache = v;
     if (v == null || v.isEmpty) {
-      await _vault.delete(key: _pinKey);
+      try {
+        await _vault.delete(key: _pinKey);
+      } catch (_) {
+        _vaultAvailable = false;
+      }
+      await _p.remove(_fallbackPinKey);
+    } else if (_vaultAvailable) {
+      try {
+        await _vault.write(key: _pinKey, value: v);
+        await _p.remove(_fallbackPinKey);
+        return;
+      } catch (_) {
+        _vaultAvailable = false;
+      }
+      await _p.setString(_fallbackPinKey, v);
     } else {
-      await _vault.write(key: _pinKey, value: v);
+      await _p.setString(_fallbackPinKey, v);
     }
   }
 
-  // ---------------- المفضلة ----------------
   static List<MediaItem> favs(String type) =>
       (_p.getStringList('${_pre}fav_$type') ?? [])
           .map((s) => MediaItem.fromJson(jsonDecode(s)))
@@ -122,7 +187,6 @@ class Store {
   static bool isFav(String type, String id) =>
       favs(type).any((e) => e.id == id);
 
-  /// يعيد true إذا أصبح العنصر في المفضلة
   static Future<bool> toggleFav(String type, MediaItem it) async {
     final l = favs(type);
     final i = l.indexWhere((e) => e.id == it.id);
@@ -136,7 +200,6 @@ class Store {
     return i < 0;
   }
 
-  // ---------------- آخر قناة ----------------
   static MediaItem? lastLive() {
     final s = _p.getString('${_pre}last');
     if (s == null) return null;
@@ -147,7 +210,6 @@ class Store {
     await _p.setString('${_pre}last', jsonEncode(it.toJson()));
   }
 
-  // ---------------- سجل المشاهدة ----------------
   static List<Map<String, dynamic>> _histRaw() =>
       (_p.getStringList('${_pre}hist') ?? [])
           .map((s) => Map<String, dynamic>.from(jsonDecode(s)))
