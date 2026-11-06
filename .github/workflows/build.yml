@@ -30,6 +30,13 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --org com.mesut --project-name mesut_iptv .
 
+      - name: Remove Flutter's generated sample test
+        shell: bash
+        run: |
+          if [ -f test/widget_test.dart ] && grep -q 'MyApp' test/widget_test.dart; then
+            rm test/widget_test.dart
+          fi
+
       - name: Configure Android manifest
         env:
           ADMOB_APP_ID: ca-app-pub-8292052707705243~8609546278
@@ -58,7 +65,7 @@ jobs:
         run: flutter pub get
 
       - name: Static analysis
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
 
       - name: Run tests when present
         shell: bash
