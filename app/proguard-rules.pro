@@ -1,5 +1,0 @@
--keep class com.xtreamplayer.app.data.** { *; }
--keepattributes *Annotation*, InnerClasses
--dontwarn org.conscrypt.**
--dontwarn org.bouncycastle.**
--dontwarn org.openjsse.**
