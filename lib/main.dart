@@ -4,7 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'theme.dart';
 import 'store.dart';
 import 'ads.dart';
-import 'i18n.dart';
+import 'i18n.dart' hide Text;
 import 'login_screen.dart';
 import 'profiles_screen.dart';
 
